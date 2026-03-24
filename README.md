@@ -28,11 +28,18 @@ npm install && npm run build
 npm link
 ```
 
-## API Key (not required)
+## API Key
 
-**rail-cli works without any credentials.** It uses the public Huxley2 proxy for National Rail Darwin data.
+A free Darwin access token is required for departure and arrival data. Station search works without one.
 
-For production use or if the public instance is down, point at your own Huxley2 instance:
+Register (instant, free): https://realtime.nationalrail.co.uk/OpenLDBWSRegistration/Registration
+
+```bash
+export DARWIN_ACCESS_TOKEN=your_token
+# or add to .env in your project directory
+```
+
+Optionally override the Huxley2 instance URL:
 
 ```bash
 export RAIL_API_URL=https://your-huxley-instance.example.com

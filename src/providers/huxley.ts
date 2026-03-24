@@ -25,12 +25,17 @@ export type HuxleyClient = {
 
 export const createHuxleyClient = (config: AppConfig): HuxleyClient => {
   const baseUrl = new URL(config.railApiUrl);
+  const accessToken = config.darwinAccessToken;
 
   const buildUrl = (path: string, expand?: boolean): URL => {
     const url = new URL(path.replace(/^\//, ''), ensureTrailingSlash(baseUrl));
 
     if (expand) {
       url.searchParams.set('expand', 'true');
+    }
+
+    if (accessToken) {
+      url.searchParams.set('accessToken', accessToken);
     }
 
     return url;
@@ -43,6 +48,7 @@ export const createHuxleyClient = (config: AppConfig): HuxleyClient => {
         label: `Rail arrivals lookup for "${crs}"`,
         schema: StationBoardResponseSchema,
         url: buildBoardUrl({
+          accessToken,
           baseUrl: ensureTrailingSlash(baseUrl),
           board: 'arrivals',
           crs,
@@ -58,6 +64,7 @@ export const createHuxleyClient = (config: AppConfig): HuxleyClient => {
         label: `Rail departures lookup for "${crs}"`,
         schema: StationBoardResponseSchema,
         url: buildBoardUrl({
+          accessToken,
           baseUrl: ensureTrailingSlash(baseUrl),
           board: 'departures',
           crs,
@@ -91,6 +98,7 @@ export const createHuxleyClient = (config: AppConfig): HuxleyClient => {
 };
 
 const buildBoardUrl = ({
+  accessToken,
   baseUrl,
   board,
   crs,
@@ -99,6 +107,7 @@ const buildBoardUrl = ({
   filterType,
   limit,
 }: {
+  accessToken?: string | undefined;
   baseUrl: URL;
   board: 'arrivals' | 'departures';
   crs: string;
@@ -116,6 +125,10 @@ const buildBoardUrl = ({
 
   if (expand) {
     url.searchParams.set('expand', 'true');
+  }
+
+  if (accessToken) {
+    url.searchParams.set('accessToken', accessToken);
   }
 
   return url;
