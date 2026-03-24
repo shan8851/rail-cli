@@ -1,0 +1,59 @@
+{
+  "name": "@shan8851/rail-cli",
+  "version": "0.1.0",
+  "description": "UK National Rail CLI for agents and humans",
+  "type": "module",
+  "bin": {
+    "rail": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/cli.ts",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "national-rail",
+    "rail",
+    "train",
+    "uk",
+    "cli",
+    "ai-agent",
+    "agents",
+    "openclaw"
+  ],
+  "author": "shan8851",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shan8851/rail-cli.git"
+  },
+  "homepage": "https://rail-cli.xyz",
+  "bugs": {
+    "url": "https://github.com/shan8851/rail-cli/issues"
+  },
+  "dependencies": {
+    "commander": "^14.0.1",
+    "dotenv": "^17.2.3",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "@types/node": "^24.5.2",
+    "eslint": "^9.36.0",
+    "globals": "^16.4.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.44.1",
+    "vitest": "^3.2.4"
+  }
+}
