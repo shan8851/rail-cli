@@ -18,6 +18,12 @@ type DeparturesCommandOptions = {
   to?: string;
 };
 
+const DEPARTURES_HELP_EXAMPLES = `
+Examples:
+  rail departures KGX
+  rail departures "edinburgh" --to york
+`;
+
 export const registerDeparturesCommand = (program: Command, huxleyClient: HuxleyClient): void => {
   program
     .command('departures')
@@ -28,6 +34,7 @@ export const registerDeparturesCommand = (program: Command, huxleyClient: Huxley
     .option('--limit <count>', 'Maximum number of departures to return', parseIntegerOption, DEFAULT_LIMIT)
     .option('--json', 'Force JSON output')
     .option('--text', 'Force text output')
+    .addHelpText('after', DEPARTURES_HELP_EXAMPLES)
     .action(async (station: string, options: DeparturesCommandOptions, command: Command) => {
       await runCommand(
         'departures',

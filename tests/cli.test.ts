@@ -1,3 +1,6 @@
+import { Readable } from 'node:stream';
+
+import type { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildCli } from '../src/buildCli.js';
@@ -20,10 +23,19 @@ const createStubHuxleyClient = (overrides: Partial<HuxleyClient> = {}): HuxleyCl
   ...overrides,
 });
 
+const applyExitOverrideRecursively = (command: Command): void => {
+  command.exitOverride();
+  command.commands.forEach((subcommand) => {
+    applyExitOverrideRecursively(subcommand);
+  });
+};
+
 type CliEnvironment = {
   columns?: number | undefined;
   env?: Record<string, string | undefined> | undefined;
   isTTY?: boolean | undefined;
+  stdin?: string | undefined;
+  stdinIsTTY?: boolean | undefined;
 };
 
 const runCli = async (
@@ -49,6 +61,7 @@ const runCli = async (
   const previousEnvironment = Object.fromEntries(
     Object.keys(environment.env ?? {}).map((key) => [key, process.env[key]]),
   );
+  const previousStdinDescriptor = Object.getOwnPropertyDescriptor(process, 'stdin');
   const previousIsTTYDescriptor = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
   const previousColumnsDescriptor = Object.getOwnPropertyDescriptor(process.stdout, 'columns');
 
@@ -76,9 +89,26 @@ const runCli = async (
     });
   }
 
+  if (environment.stdin !== undefined || environment.stdinIsTTY !== undefined) {
+    const stdinChunks = environment.stdin === undefined ? [] : [environment.stdin];
+    const fakeStdin = Readable.from(stdinChunks);
+
+    if (environment.stdinIsTTY !== undefined) {
+      Object.defineProperty(fakeStdin, 'isTTY', {
+        configurable: true,
+        value: environment.stdinIsTTY,
+      });
+    }
+
+    Object.defineProperty(process, 'stdin', {
+      configurable: true,
+      value: fakeStdin,
+    });
+  }
+
   try {
     const cli = buildCli(dependencies);
-    cli.exitOverride();
+    applyExitOverrideRecursively(cli);
 
     try {
       await cli.parseAsync(args, {
@@ -109,6 +139,9 @@ const runCli = async (
       Object.defineProperty(process.stdout, 'columns', previousColumnsDescriptor);
     } else {
       delete (process.stdout as Partial<typeof process.stdout> & { columns?: number }).columns;
+    }
+    if (previousStdinDescriptor) {
+      Object.defineProperty(process, 'stdin', previousStdinDescriptor);
     }
     if (previousIsTTYDescriptor) {
       Object.defineProperty(process.stdout, 'isTTY', previousIsTTYDescriptor);
@@ -422,6 +455,240 @@ describe('rail cli', () => {
     });
   });
 
+  it('returns batched search results in json mode when reading queries from stdin', async () => {
+    const huxleyClient = createStubHuxleyClient({
+      searchStations: vi.fn(async (query: string) => {
+        if (query === 'waterloo') {
+          return [
+            {
+              crs: 'WAT',
+              name: 'London Waterloo',
+            },
+            {
+              crs: 'WAE',
+              name: 'London Waterloo East',
+            },
+          ];
+        }
+
+        return [
+          {
+            crs: 'VIC',
+            name: 'London Victoria',
+          },
+          {
+            crs: 'MCV',
+            name: 'Manchester Victoria',
+          },
+        ];
+      }),
+    });
+
+    const result = await runCli(
+      ['search', '--stdin', '--json'],
+      {
+        huxleyClient,
+      },
+      {
+        stdin: 'waterloo\nvictoria\n',
+        stdinIsTTY: false,
+      },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      command: 'search',
+      data: {
+        queries: [
+          {
+            candidates: [
+              {
+                crs: 'WAT',
+                name: 'London Waterloo',
+              },
+              {
+                crs: 'WAE',
+                name: 'London Waterloo East',
+              },
+            ],
+            query: 'waterloo',
+          },
+          {
+            candidates: [
+              {
+                crs: 'VIC',
+                name: 'London Victoria',
+              },
+              {
+                crs: 'MCV',
+                name: 'Manchester Victoria',
+              },
+            ],
+            query: 'victoria',
+          },
+        ],
+      },
+      ok: true,
+    });
+  });
+
+  it('projects search results to crs values in text mode', async () => {
+    const huxleyClient = createStubHuxleyClient({
+      searchStations: vi.fn(async () => [
+        {
+          crs: 'WAT',
+          name: 'London Waterloo',
+        },
+        {
+          crs: 'WAE',
+          name: 'London Waterloo East',
+        },
+      ]),
+    });
+
+    const result = await runCli(
+      ['search', 'waterloo', '--select', 'crs', '--text'],
+      {
+        huxleyClient,
+      },
+      {
+        isTTY: false,
+      },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(stripAnsi(result.stdout)).toBe('WAT\nWAE\n');
+  });
+
+  it('projects search results to crs values in json mode', async () => {
+    const huxleyClient = createStubHuxleyClient({
+      searchStations: vi.fn(async () => [
+        {
+          crs: 'WAT',
+          name: 'London Waterloo',
+        },
+        {
+          crs: 'WAE',
+          name: 'London Waterloo East',
+        },
+      ]),
+    });
+
+    const result = await runCli(['search', 'waterloo', '--select', 'crs', '--json'], {
+      huxleyClient,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      command: 'search',
+      data: {
+        candidates: [
+          {
+            crs: 'WAT',
+          },
+          {
+            crs: 'WAE',
+          },
+        ],
+        query: 'waterloo',
+      },
+      ok: true,
+    });
+  });
+
+  it('rejects combining stdin mode with a positional query', async () => {
+    const huxleyClient = createStubHuxleyClient();
+
+    const result = await runCli(
+      ['search', 'waterloo', '--stdin', '--json'],
+      {
+        huxleyClient,
+      },
+      {
+        stdin: 'victoria\n',
+        stdinIsTTY: false,
+      },
+    );
+
+    expect(result.exitCode).toBe(2);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      command: 'search',
+      error: {
+        code: 'INVALID_INPUT',
+        message: expect.stringContaining('query cannot be used together with --stdin'),
+      },
+      ok: false,
+    });
+  });
+
+  it('rejects invalid search select values', async () => {
+    const huxleyClient = createStubHuxleyClient();
+
+    const result = await runCli(['search', 'waterloo', '--select', 'foo', '--json'], {
+      huxleyClient,
+    });
+
+    expect(result.exitCode).toBe(2);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      command: 'search',
+      error: {
+        code: 'INVALID_INPUT',
+        message: '--select must be one of: name, crs, name,crs.',
+      },
+      ok: false,
+    });
+    expect(huxleyClient.searchStations).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty stdin in batch search mode', async () => {
+    const huxleyClient = createStubHuxleyClient();
+
+    const result = await runCli(
+      ['search', '--stdin', '--json'],
+      {
+        huxleyClient,
+      },
+      {
+        stdin: '',
+        stdinIsTTY: false,
+      },
+    );
+
+    expect(result.exitCode).toBe(2);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      command: 'search',
+      error: {
+        code: 'INVALID_INPUT',
+        message: expect.stringContaining('No search queries were provided on stdin'),
+      },
+      ok: false,
+    });
+  });
+
+  it('rejects tty stdin in batch search mode', async () => {
+    const huxleyClient = createStubHuxleyClient();
+
+    const result = await runCli(
+      ['search', '--stdin', '--json'],
+      {
+        huxleyClient,
+      },
+      {
+        stdinIsTTY: true,
+      },
+    );
+
+    expect(result.exitCode).toBe(2);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      command: 'search',
+      error: {
+        code: 'INVALID_INPUT',
+        message: expect.stringContaining('--stdin requires piped stdin input'),
+      },
+      ok: false,
+    });
+  });
+
   it('renders coloured departures text with expanded calling points in tty mode', async () => {
     const huxleyClient = createStubHuxleyClient({
       getDepartures: vi.fn(async () => createDepartureBoard()),
@@ -689,5 +956,42 @@ describe('rail cli', () => {
     expect(result.stdout).toContain('departures');
     expect(result.stdout).toContain('arrivals');
     expect(result.stdout).toContain('search');
+    expect(result.stdout).toContain('Examples:');
+    expect(result.stdout).toContain('rail departures KGX');
+    expect(result.stdout).toContain('rail departures "edinburgh" --to york');
+    expect(result.stdout).toContain('rail arrivals leeds --from london --limit 5');
+    expect(result.stdout).toContain('rail search "waterloo"');
+    expect(result.stdout).toContain('printf "waterloo\\nvictoria\\n" | rail search --stdin');
+  });
+
+  it('prints departures help examples', async () => {
+    const result = await runCli(['departures', '--help']);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Examples:');
+    expect(result.stdout).toContain('rail departures KGX');
+    expect(result.stdout).toContain('rail departures "edinburgh" --to york');
+  });
+
+  it('prints arrivals help examples', async () => {
+    const result = await runCli(['arrivals', '--help']);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Examples:');
+    expect(result.stdout).toContain('rail arrivals leeds --from london --limit 5');
+  });
+
+  it('prints search help examples and agent-first options', async () => {
+    const result = await runCli(['search', '--help']);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('Usage: rail search [options] <query>');
+    expect(result.stdout).toContain('       rail search [options] --stdin');
+    expect(result.stdout).toContain('--stdin');
+    expect(result.stdout).toContain('--select <fields>');
+    expect(result.stdout).toContain('Examples:');
+    expect(result.stdout).toContain('rail search "waterloo"');
+    expect(result.stdout).toContain('rail search "waterloo" --select crs');
+    expect(result.stdout).toContain('printf "waterloo\\nvictoria\\n" | rail search --stdin');
   });
 });

@@ -11,6 +11,8 @@ rail departures KGX                     # Next trains from King's Cross
 rail arrivals "leeds"                   # What's arriving at Leeds?
 rail departures "edinburgh" --to "york" # Edinburgh trains calling at York
 rail search "waterloo"                  # Find stations by name
+printf "waterloo\nvictoria\n" | rail search --stdin
+rail search "waterloo" --select crs     # Return CRS codes only
 ```
 
 ## Install
@@ -62,6 +64,8 @@ rail departures KGX --to EDB            # Filter to a destination
 rail arrivals "leeds" --from "london"    # Filter from an origin
 rail departures KGX --expand             # Include calling points
 rail departures KGX --limit 5            # Limit results
+rail search "waterloo" --select crs      # Return one field per candidate
+printf "waterloo\nvictoria\n" | rail search --stdin
 ```
 
 ## Agent Integration
@@ -71,6 +75,7 @@ The CLI defaults to **text in a TTY** and **JSON when piped** — no flag needed
 ```bash
 rail departures KGX --json               # Explicit JSON
 rail search "waterloo" | jq              # Auto-JSON when piped
+printf "waterloo\nvictoria\n" | rail search --stdin --json
 ```
 
 Every response uses a stable envelope:
@@ -88,6 +93,22 @@ Every response uses a stable envelope:
 Errors return `ok: false` with structured `error.code`, `error.message`, and `error.retryable` fields. Exit codes: `0` success, `2` bad input/ambiguity, `3` upstream failure, `4` internal error.
 
 Works with [OpenClaw](https://github.com/openclaw/openclaw), Claude Desktop MCP, or any agent that can shell out.
+
+### Search Ergonomics
+
+`rail search` supports a small projection mode for agents that only need one field:
+
+```bash
+rail search "waterloo" --select crs
+rail search "waterloo" --select name,crs
+```
+
+It also supports newline-delimited batch queries from stdin:
+
+```bash
+printf "waterloo\nvictoria\n" | rail search --stdin
+printf "waterloo\nvictoria\n" | rail search --stdin --json
+```
 
 ## Examples
 
@@ -107,6 +128,23 @@ $ rail search "waterloo"
 London Waterloo (WAT)
 London Waterloo East (WAE)
 Waterloo (Merseyside) (WLO)
+
+# Return just CRS codes
+$ rail search "waterloo" --select crs
+WAT
+WAE
+WLO
+
+# Batch station search from stdin
+$ printf "waterloo\nvictoria\n" | rail search --stdin
+Query: waterloo
+London Waterloo (WAT)
+London Waterloo East (WAE)
+Waterloo (Merseyside) (WLO)
+
+Query: victoria
+London Victoria (VIC)
+Manchester Victoria (MCV)
 
 # Filter departures to a destination
 $ rail departures leeds --to london

@@ -21,6 +21,14 @@ type ServiceLocation = {
   via?: string | null | undefined;
 };
 
+type CallingPoint = {
+  locationName: string;
+};
+
+type CallingPointList = {
+  callingPoint?: CallingPoint[] | null | undefined;
+};
+
 export const normalizeRailBoardData = ({
   board,
   boardKind,
@@ -39,7 +47,7 @@ export const normalizeRailBoardData = ({
     : undefined,
   requestedFilter,
   requestedStation,
-  services: board.trainServices.map((service) => normalizeBoardService(service, boardKind, expand)),
+  services: (board.trainServices ?? []).map((service) => normalizeBoardService(service, boardKind, expand)),
   station: {
     crs: normalizeOptionalValue(board.crs) ?? resolvedStation.crs,
     name: normalizeOptionalValue(board.locationName) ?? resolvedStation.name,
@@ -214,15 +222,15 @@ const normalizeServiceStatus = (
 };
 
 const chooseLocations = (
-  currentLocations: Array<ServiceLocation | undefined> | undefined,
-  originalLocations: Array<ServiceLocation | undefined> | undefined,
+  currentLocations: Array<ServiceLocation | undefined> | null | undefined,
+  originalLocations: Array<ServiceLocation | undefined> | null | undefined,
 ): Array<ServiceLocation | undefined> =>
   (currentLocations?.length ?? 0) > 0 ? currentLocations ?? [] : originalLocations ?? [];
 
 const formatServiceLocations = (
-  locations: Array<ServiceLocation | undefined>,
+  locations: Array<ServiceLocation | undefined> | null | undefined,
 ): string | undefined => {
-  const formattedLocations = locations
+  const formattedLocations = (locations ?? [])
     .flatMap((location) => {
       const normalizedName = normalizeOptionalValue(location?.locationName);
 
@@ -255,10 +263,10 @@ const getCallingPoints = (
 };
 
 const flattenCallingPoints = (
-  callingPointLists: Array<{ callingPoint: Array<{ locationName: string }> }> | undefined,
+  callingPointLists: CallingPointList[] | null | undefined,
 ): string[] =>
   (callingPointLists ?? [])
-    .flatMap((callingPointList) => callingPointList.callingPoint)
+    .flatMap((callingPointList) => callingPointList.callingPoint ?? [])
     .map((callingPoint) => callingPoint.locationName.trim())
     .filter(Boolean)
     .reduce<string[]>(
@@ -285,7 +293,7 @@ const getServiceEmoji = (status: RailServiceStatus, statusLabel: string): string
   return statusLabel;
 };
 
-const normalizeOptionalValue = (value?: string): string | undefined => {
+const normalizeOptionalValue = (value?: string | null): string | undefined => {
   const normalizedValue = value?.trim();
   return normalizedValue ? normalizedValue : undefined;
 };

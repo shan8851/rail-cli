@@ -18,6 +18,11 @@ type ArrivalsCommandOptions = {
   text?: boolean;
 };
 
+const ARRIVALS_HELP_EXAMPLES = `
+Examples:
+  rail arrivals leeds --from london --limit 5
+`;
+
 export const registerArrivalsCommand = (program: Command, huxleyClient: HuxleyClient): void => {
   program
     .command('arrivals')
@@ -28,6 +33,7 @@ export const registerArrivalsCommand = (program: Command, huxleyClient: HuxleyCl
     .option('--limit <count>', 'Maximum number of arrivals to return', parseIntegerOption, DEFAULT_LIMIT)
     .option('--json', 'Force JSON output')
     .option('--text', 'Force text output')
+    .addHelpText('after', ARRIVALS_HELP_EXAMPLES)
     .action(async (station: string, options: ArrivalsCommandOptions, command: Command) => {
       await runCommand(
         'arrivals',

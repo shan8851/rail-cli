@@ -36,6 +36,15 @@ export type StationCandidate = {
   name: string;
 };
 
+export type SearchSelectableField = 'crs' | 'name';
+
+export type SearchSelectMode = 'crs' | 'name' | 'name,crs';
+
+export type SearchProjectedCandidate =
+  | Pick<StationCandidate, 'crs'>
+  | Pick<StationCandidate, 'name'>
+  | Pick<StationCandidate, 'name' | 'crs'>;
+
 export type ResolvedStation = {
   crs: string;
   name: string;
@@ -69,6 +78,15 @@ export type RailBoardData = {
 };
 
 export type SearchData = {
-  candidates: StationCandidate[];
+  candidates: SearchProjectedCandidate[];
   query: string;
+};
+
+export type SearchQueryResult = {
+  candidates: SearchProjectedCandidate[];
+  query: string;
+};
+
+export type SearchBatchData = {
+  queries: SearchQueryResult[];
 };

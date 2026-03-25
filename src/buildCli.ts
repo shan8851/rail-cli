@@ -16,6 +16,14 @@ export type CliDependencies = {
 
 const require = createRequire(import.meta.url);
 const packageJson = require('../package.json') as { version: string };
+const TOP_LEVEL_HELP_EXAMPLES = `
+Examples:
+  rail departures KGX
+  rail departures "edinburgh" --to york
+  rail arrivals leeds --from london --limit 5
+  rail search "waterloo"
+  printf "waterloo\\nvictoria\\n" | rail search --stdin
+`;
 
 export const buildCli = (dependencies?: CliDependencies): Command => {
   const config = loadConfig();
@@ -34,6 +42,7 @@ export const buildCli = (dependencies?: CliDependencies): Command => {
   registerArrivalsCommand(program, huxleyClient);
   registerSearchCommand(program, huxleyClient);
 
+  program.addHelpText('after', TOP_LEVEL_HELP_EXAMPLES);
   program.addHelpText(
     'after',
     '\nOutput defaults to text in a TTY and JSON when piped. Use --json or --text to override.',
